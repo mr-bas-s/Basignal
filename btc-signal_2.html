@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC Signaal — live marktdruk, momentum en liquiditeit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0C10;
+    --card:#12151B;
+    --card2:#161A21;
+    --border:#20252E;
+    --text:#E7E9EC;
+    --dim:#8992A3;
+    --dim2:#5C6472;
+    --orange:#F7931A;
+    --long:#22C55E;
+    --short:#EF4444;
+    --wait:#EAB308;
+    --cyan:#35C4E0;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 20% -10%, rgba(247,147,26,0.08), transparent),
+      radial-gradient(ellipse 700px 500px at 90% 10%, rgba(53,196,224,0.05), transparent),
+      var(--bg);
+    color:var(--text);
+    font-family:'Space Grotesk', sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'IBM Plex Mono', monospace;}
+  a{color:inherit;}
+
+  .ticker-wrap{
+    border-bottom:1px solid var(--border);
+    background:#0D1015;
+    overflow:hidden;
+    white-space:nowrap;
+    height:34px;
+    display:flex;
+    align-items:center;
+  }
+  .ticker-track{
+    display:inline-flex;
+    align-items:center;
+    animation: scroll-left 28s linear infinite;
+    padding-left:100%;
+  }
+  .ticker-track span{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--dim);
+    margin-right:44px;
+    letter-spacing:0.02em;
+  }
+  .ticker-track span b{color:var(--text); font-weight:600;}
+  @keyframes scroll-left{
+    0%{transform:translateX(0);}
+    100%{transform:translateX(-100%);}
+  }
+
+  .wrap{max-width:960px; margin:0 auto; padding:28px 20px 60px;}
+
+  header.top{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:26px; flex-wrap:wrap; gap:10px;
+  }
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .glyph{
+    width:34px; height:34px; border-radius:9px;
+    background:linear-gradient(135deg, var(--orange), #c9700a);
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:17px; color:#0A0C10;
+  }
+  .brand h1{font-size:17px; margin:0; font-weight:600; letter-spacing:-0.01em;}
+  .brand p{margin:0; font-size:12px; color:var(--dim);}
+
+  .status{
+    display:flex; align-items:center; gap:7px;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--dim);
+    border:1px solid var(--border); padding:6px 11px; border-radius:99px;
+    background:var(--card);
+  }
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--dim2);}
+  .dot.live{background:var(--long); box-shadow:0 0 0 3px rgba(34,197,94,0.18);}
+  .dot.err{background:var(--short); box-shadow:0 0 0 3px rgba(239,68,68,0.18);}
+
+  .board{
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    background:linear-gradient(180deg, var(--card2), var(--card));
+    padding:30px 26px;
+    margin-bottom:18px;
+    position:relative;
+    overflow:hidden;
+  }
+  .board::before{
+    content:"";
+    position:absolute; inset:0;
+    background:radial-gradient(600px 240px at 15% 0%, rgba(247,147,26,0.10), transparent);
+    pointer-events:none;
+  }
+  .board-top{display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap;}
+  .board-label{font-size:11px; text-transform:uppercase; letter-spacing:0.12em; color:var(--dim); font-family:'IBM Plex Mono', monospace;}
+  .price-now{font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--dim); margin-top:4px;}
+  .price-now b{color:var(--text); font-size:15px;}
+  .chg-up{color:var(--long);}
+  .chg-down{color:var(--short);}
+
+  .flap-holder{ perspective:800px; margin:22px 0 10px; }
+  .flap{
+    display:inline-block; font-size:64px; font-weight:700; letter-spacing:0.02em;
+    line-height:1; transform-style:preserve-3d; transition:transform .16s;
+  }
+  .flap.flipping{animation:flip 0.5s ease;}
+  @keyframes flip{
+    0%{transform:rotateX(0deg); opacity:1;}
+    45%{transform:rotateX(90deg); opacity:0.2;}
+    55%{transform:rotateX(90deg); opacity:0.2;}
+    100%{transform:rotateX(0deg); opacity:1;}
+  }
+  .flap.LONG{color:var(--long); text-shadow:0 0 30px rgba(34,197,94,0.25);}
+  .flap.SHORT{color:var(--short); text-shadow:0 0 30px rgba(239,68,68,0.25);}
+  .flap.WAIT{color:var(--wait); text-shadow:0 0 30px rgba(234,179,8,0.20);}
+
+  .board-sub{font-size:13.5px; color:var(--dim); max-width:520px; line-height:1.5;}
+
+  .board-meta{
+    display:flex; gap:26px; margin-top:22px; flex-wrap:wrap;
+    border-top:1px solid var(--border); padding-top:16px;
+  }
+  .meta-item .k{font-size:10.5px; text-transform:uppercase; letter-spacing:0.1em; color:var(--dim2); font-family:'IBM Plex Mono', monospace;}
+  .meta-item .v{font-family:'IBM Plex Mono', monospace; font-size:15px; margin-top:3px; font-weight:600;}
+
+  .confidence-bar{height:5px; border-radius:99px; background:#1c212a; margin-top:8px; overflow:hidden; width:130px;}
+  .confidence-fill{height:100%; border-radius:99px; transition:width .4s;}
+
+  .section-head{margin:30px 0 12px;}
+  .section-head h2{font-size:15px; margin:0 0 4px; font-weight:600;}
+  .section-head p{font-size:12.5px; color:var(--dim); margin:0; max-width:560px; line-height:1.5;}
+
+  .grid5{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:10px; margin-bottom:8px;
+  }
+  .grid3{
+    display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:18px;
+  }
+  @media (max-width:720px){.grid3{grid-template-columns:1fr;}}
+
+  .ind-card{
+    border:1px solid var(--border); border-radius:var(--radius);
+    background:var(--card); padding:16px;
+  }
+  .ind-card .ihead{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:6px;}
+  .ind-card h3{font-size:12.5px; margin:0; font-weight:600;}
+  .pill{
+    font-family:'IBM Plex Mono', monospace; font-size:10px; padding:3px 8px; border-radius:99px;
+    font-weight:600; letter-spacing:0.03em; white-space:nowrap;
+  }
+  .pill.up{background:rgba(34,197,94,0.14); color:var(--long);}
+  .pill.down{background:rgba(239,68,68,0.14); color:var(--short);}
+  .pill.flat{background:rgba(234,179,8,0.14); color:var(--wait);}
+  .ind-row{display:flex; justify-content:space-between; font-size:12px; color:var(--dim); margin-top:5px; font-family:'IBM Plex Mono', monospace;}
+  .ind-row b{color:var(--text); font-weight:600;}
+  .ind-desc{font-size:11px; color:var(--dim2); margin-top:9px; line-height:1.5;}
+
+  .chart-card{
+    border:1px solid var(--border); border-radius:var(--radius); background:var(--card);
+    padding:18px; margin-bottom:18px;
+  }
+  .chart-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
+  .chart-head h3{font-size:13px; margin:0; font-weight:600;}
+  .chart-head span{font-size:11px; color:var(--dim2); font-family:'IBM Plex Mono', monospace;}
+  canvas{width:100%; display:block;}
+
+  .tr-card{
+    border:1px solid var(--border); border-radius:var(--radius); background:var(--card);
+    padding:18px 18px 6px; margin-bottom:18px;
+  }
+  .tr-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;}
+  .tr-head h3{font-size:13px; margin:0; font-weight:600;}
+  .tr-head span{font-size:11px; color:var(--dim2);}
+  table{width:100%; border-collapse:collapse; margin-top:8px;}
+  th{
+    text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--dim2); padding:8px 6px; border-bottom:1px solid var(--border); font-weight:500;
+  }
+  td{
+    padding:10px 6px; font-size:12.5px; border-bottom:1px solid #191d24;
+    font-family:'IBM Plex Mono', monospace; color:var(--text);
+  }
+  td.side-LONG{color:var(--long); font-weight:600;}
+  td.side-SHORT{color:var(--short); font-weight:600;}
+  .empty-row td{color:var(--dim2); text-align:center; padding:26px 6px; font-family:'Space Grotesk';}
+
+  .faq-card{
+    border:1px solid var(--border); border-radius:var(--radius); background:var(--card);
+    padding:18px; margin-bottom:18px;
+  }
+  .faq-item{padding:14px 0; border-bottom:1px solid #191d24;}
+  .faq-item:last-child{border-bottom:none;}
+  .faq-item h4{font-size:13px; margin:0 0 6px; font-weight:600;}
+  .faq-item p{font-size:12.5px; color:var(--dim); margin:0; line-height:1.6;}
+
+  footer{
+    font-size:11.5px; color:var(--dim2); line-height:1.6; padding-top:8px;
+    border-top:1px solid var(--border); margin-top:6px;
+  }
+  footer p{margin:8px 0;}
+  footer b{color:var(--dim);}
+</style>
+</head>
+<body>
+
+<div class="ticker-wrap">
+  <div class="ticker-track" id="tickerTrack"><span>BTC/EUR laden…</span></div>
+</div>
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <div class="glyph">₿</div>
+      <div>
+        <h1>BTC Signaal</h1>
+        <p>Eigen versie · live publieke marktdata · geen betaalde databron</p>
+      </div>
+    </div>
+    <div class="status">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">verbinden…</span>
+    </div>
+  </header>
+
+  <div class="board">
+    <div class="board-top">
+      <div>
+        <div class="board-label">Huidig signaal · BTC · 4H</div>
+        <div class="price-now" id="priceNow">koers laden…</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="board-label">Vertrouwen</div>
+        <div class="v mono" id="confVal" style="font-size:15px; font-weight:600; margin-top:4px;">–</div>
+        <div class="confidence-bar"><div class="confidence-fill" id="confFill" style="width:0%; background:var(--wait);"></div></div>
+      </div>
+    </div>
+
+    <div class="flap-holder"><span class="flap WAIT" id="flapWord">LADEN</span></div>
+    <div class="board-sub" id="boardSub">Bezig met ophalen van koersdata en indicatoren via Binance.</div>
+
+    <div class="board-meta">
+      <div class="meta-item">
+        <div class="k">Status sinds</div>
+        <div class="v" id="mSince">-</div>
+      </div>
+      <div class="meta-item">
+        <div class="k">Signalen deze week</div>
+        <div class="v" id="mWeekCount">-</div>
+      </div>
+      <div class="meta-item">
+        <div class="k">Laatst bijgewerkt</div>
+        <div class="v" id="mUpdated">-</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-head">
+    <h2>Wat gaat er in een signaal</h2>
+    <p>Vijf gratis publieke databronnen bij Binance, vertaald naar dezelfde categorieen die professionele desks volgen. Als genoeg van deze vijf dezelfde kant op wijzen vuurt er een signaal. Bij twijfel blijft het op WAIT staan.</p>
+  </div>
+
+  <div class="grid5">
+    <div class="ind-card">
+      <div class="ihead"><h3>Aggressieve flow</h3><span class="pill flat" id="pillFlow">-</span></div>
+      <div class="ind-row"><span>Taker buy ratio</span><b id="flowVal">-</b></div>
+      <div class="ind-desc">Wie neemt initiatief, kopers of verkopers. Proxy voor grote agressieve orders.</div>
+    </div>
+    <div class="ind-card">
+      <div class="ihead"><h3>Order book druk</h3><span class="pill flat" id="pillBook">-</span></div>
+      <div class="ind-row"><span>Bid/ask balans</span><b id="bookVal">-</b></div>
+      <div class="ind-desc">Waar het meeste volume klaarstaat in het live orderboek.</div>
+    </div>
+    <div class="ind-card">
+      <div class="ihead"><h3>Structuurzones</h3><span class="pill flat" id="pillZone">-</span></div>
+      <div class="ind-row"><span>Positie in range</span><b id="zoneVal">-</b></div>
+      <div class="ind-desc">Afstand tot recente steun en weerstand, geen liquidatiedata maar wel echte niveaus.</div>
+    </div>
+    <div class="ind-card">
+      <div class="ihead"><h3>Crowd sentiment</h3><span class="pill flat" id="pillSent">-</span></div>
+      <div class="ind-row"><span>Funding rate</span><b id="sentVal">-</b></div>
+      <div class="ind-desc">Betaalt de meerderheid voor long of short. Extreem hoog telt als contraire waarschuwing.</div>
+    </div>
+    <div class="ind-card">
+      <div class="ihead"><h3>Trend &amp; liquiditeit</h3><span class="pill flat" id="pillTrend">-</span></div>
+      <div class="ind-row"><span>EMA9 vs EMA21</span><b id="trendVal">-</b></div>
+      <div class="ind-desc">Richting van de trend, alleen meegeteld bij voldoende volume erachter.</div>
+    </div>
+  </div>
+
+  <div class="tr-card" style="margin-bottom:18px;">
+    <div class="tr-head"><h3>Wat betekent het signaal</h3></div>
+    <div class="grid3" style="margin-top:12px; margin-bottom:0;">
+      <div class="ind-card" style="border-color:rgba(34,197,94,0.25);">
+        <div class="ihead"><h3 style="color:var(--long);">LONG</h3></div>
+        <div class="ind-desc" style="color:var(--dim);">Koers verwacht omhoog. Actie: BTC kopen. Gewoon via een beurs, geen extra risico nodig.</div>
+      </div>
+      <div class="ind-card" style="border-color:rgba(239,68,68,0.25);">
+        <div class="ihead"><h3 style="color:var(--short);">SHORT</h3></div>
+        <div class="ind-desc" style="color:var(--dim);">Koers verwacht omlaag. Shorten kan alleen via margin of futures, lenen en verkopen, later terugkopen. Hoger risico, liquidatie mogelijk. Kun je niet met gewone spot aankoop.</div>
+      </div>
+      <div class="ind-card" style="border-color:rgba(234,179,8,0.25);">
+        <div class="ihead"><h3 style="color:var(--wait);">WAIT</h3></div>
+        <div class="ind-desc" style="color:var(--dim);">Geen duidelijke richting. Actie: niks doen, afwachten tot het signaal wisselt.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-head">
+      <h3>BTC/EUR . 4H koers met EMA9 / EMA21</h3>
+      <span class="mono">volgende update over <b id="countdown">60</b>s</span>
+    </div>
+    <canvas id="chartCanvas" height="220"></canvas>
+  </div>
+
+  <div class="tr-card">
+    <div class="tr-head">
+      <h3>Track record</h3>
+      <span>alleen live signalen sinds dit dashboard voor het eerst draaide, geen achteraf verzonnen data</span>
+    </div>
+    <table>
+      <thead><tr><th>Kant</th><th>Entry</th><th>Tijd</th><th>Piek beweging</th><th>Status</th></tr></thead>
+      <tbody id="trBody">
+        <tr class="empty-row"><td colspan="5">Nog geen gelogde signalen. Zodra het eerste LONG of SHORT signaal vuurt, verschijnt het hier.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="faq-card">
+    <div class="tr-head"><h3>Veelgestelde vragen</h3></div>
+    <div class="faq-item">
+      <h4>Wat is een structuurzone?</h4>
+      <p>Het recente hoogste en laagste punt van de koers. Prijs die dicht bij de bodem van die range zit, heeft vaker ruimte om te stuiten. Dicht bij de top, vaker ruimte om terug te vallen. Dit is geen liquidatiedata, gewoon zichtbare prijsstructuur.</p>
+    </div>
+    <div class="faq-item">
+      <h4>Hoe vaak vuurt het signaal?</h4>
+      <p>Dat hangt puur af van de markt zelf, daar kan ik geen vast aantal per week over beloven. Er zit wel een rem op: als het signaal eenmaal LONG of SHORT staat, moet de markt eerst duidelijk omslaan voordat het weer verandert. Zo wisselt het niet bij elk klein wiebeltje.</p>
+    </div>
+    <div class="faq-item">
+      <h4>Welke data zit hierachter?</h4>
+      <p>Vijf gratis, publieke databronnen bij Binance: taker volume, het live orderboek, recente prijsstructuur, funding rate en EMA trend met volume. Geen Hyblock, geen betaalde liquidatiedata, geen wallet tracking.</p>
+    </div>
+    <div class="faq-item">
+      <h4>Voorspelt dit de koers van Bitcoin?</h4>
+      <p>Nee. Het is een kansinschatting op basis van wat er nu zichtbaar is in de markt, geen voorspelling. Jij blijft zelf verantwoordelijk voor entry, stop, hefboom en positiegrootte.</p>
+    </div>
+  </div>
+
+  <footer>
+    <p><b>Hoe dit werkt.</b> Koers en chart komen van het BTC/EUR paar bij Binance. Funding rate, open interest en het orderboek komen van het BTC/USDT paar, want een euro futures markt bestaat daar niet. Dat beinvloedt alleen de druk scores, niet de koers die je ziet. Alles gebeurt in je browser, er wordt niets naar een server van mij gestuurd. Ververst elke 60 seconden zolang deze pagina open staat.</p>
+    <p><b>Geen financieel advies.</b> Dit is een eigen, eenvoudigere versie geinspireerd op budsignal.io, gebouwd op gratis publieke data in plaats van hun betaalde Hyblock databron. Signalen zijn kansberekening op basis van zichtbare marktdata, geen garantie en geen advies. Handel op eigen risico.</p>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  const SPOT_SYMBOL = "BTCEUR";
+  const FUT_SYMBOL = "BTCUSDT";
+  const INTERVAL = "4h";
+  const REFRESH_MS = 60000;
+  const ENTER_THRESHOLD = 3;
+
+  const el = id => document.getElementById(id);
+  const fmtEur = n => '\u20ac' + n.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmtPct = n => (n>=0?'+':'') + n.toFixed(2) + '%';
+  let secondsToNext = REFRESH_MS/1000;
+
+  let openTrade = null;
+  let activeState = {side:'WAIT', since:Date.now()};
+
+  function ema(values, period){
+    const k = 2/(period+1);
+    let out = [values[0]];
+    for(let i=1;i<values.length;i++) out.push(values[i]*k + out[i-1]*(1-k));
+    return out;
+  }
+  function rsi(values, period){
+    let gains=0, losses=0;
+    for(let i=1;i<=period;i++){
+      const d = values[i]-values[i-1];
+      if(d>=0) gains+=d; else losses-=d;
+    }
+    let avgGain=gains/period, avgLoss=losses/period;
+    let rsis=[];
+    for(let i=period+1;i<values.length;i++){
+      const d = values[i]-values[i-1];
+      const gain = d>0?d:0, loss = d<0?-d:0;
+      avgGain = (avgGain*(period-1)+gain)/period;
+      avgLoss = (avgLoss*(period-1)+loss)/period;
+      const rs = avgLoss===0 ? 100 : avgGain/avgLoss;
+      rsis.push(100 - (100/(1+rs)));
+    }
+    return rsis[rsis.length-1];
+  }
+
+  async function getJson(url){
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('fetch failed '+url);
+    return r.json();
+  }
+
+  async function fetchAll(){
+    const [klines, funding, oiHist, ticker, depth] = await Promise.all([
+      getJson('https://api.binance.com/api/v3/klines?symbol='+SPOT_SYMBOL+'&interval='+INTERVAL+'&limit=100'),
+      getJson('https://fapi.binance.com/fapi/v1/fundingRate?symbol='+FUT_SYMBOL+'&limit=1'),
+      getJson('https://fapi.binance.com/futures/data/openInterestHist?symbol='+FUT_SYMBOL+'&period=4h&limit=2'),
+      getJson('https://api.binance.com/api/v3/ticker/24hr?symbol='+SPOT_SYMBOL),
+      getJson('https://api.binance.com/api/v3/depth?symbol='+SPOT_SYMBOL+'&limit=100')
+    ]);
+    return {klines, funding, oiHist, ticker, depth};
+  }
+
+  function computeAll(data){
+    const closes = data.klines.map(k=>parseFloat(k[4]));
+    const highs = data.klines.map(k=>parseFloat(k[2]));
+    const lows = data.klines.map(k=>parseFloat(k[3]));
+    const volumes = data.klines.map(k=>parseFloat(k[5]));
+    const takerBuy = data.klines.map(k=>parseFloat(k[9]));
+
+    const ema9arr = ema(closes.slice(-40), 9);
+    const ema21arr = ema(closes.slice(-40), 21);
+    const ema9 = ema9arr[ema9arr.length-1];
+    const ema21 = ema21arr[ema21arr.length-1];
+    const rsiVal = rsi(closes.slice(-40), 14);
+    const lastClose = closes[closes.length-1];
+    const prevClose = closes[closes.length-2];
+    const priceChangePct = ((lastClose-prevClose)/prevClose)*100;
+
+    const tSumBuy = takerBuy.slice(-5).reduce((a,b)=>a+b,0);
+    const tSumVol = volumes.slice(-5).reduce((a,b)=>a+b,0);
+    const flowRatio = tSumVol>0 ? tSumBuy/tSumVol : 0.5;
+    const flowScore = flowRatio>0.55 ? 1 : (flowRatio<0.45 ? -1 : 0);
+
+    const bids = data.depth.bids || [];
+    const asks = data.depth.asks || [];
+    const bidVol = bids.reduce((a,b)=>a+parseFloat(b[1]),0);
+    const askVol = asks.reduce((a,b)=>a+parseFloat(b[1]),0);
+    const bookImbalance = (bidVol+askVol)>0 ? (bidVol-askVol)/(bidVol+askVol) : 0;
+    const bookScore = bookImbalance>0.12 ? 1 : (bookImbalance<-0.12 ? -1 : 0);
+
+    const swingHigh = Math.max.apply(null, highs.slice(-20));
+    const swingLow = Math.min.apply(null, lows.slice(-20));
+    const rangePos = swingHigh>swingLow ? (lastClose-swingLow)/(swingHigh-swingLow) : 0.5;
+    const zoneScore = rangePos<0.35 ? 1 : (rangePos>0.65 ? -1 : 0);
+
+    const fundingRate = data.funding && data.funding[0] ? parseFloat(data.funding[0].fundingRate)*100 : 0;
+    const sentScore = fundingRate>0.02 ? -1 : (fundingRate<-0.02 ? 1 : 0);
+
+    let oiChangePct = 0;
+    if(data.oiHist && data.oiHist.length>=2){
+      const prevOi = parseFloat(data.oiHist[0].sumOpenInterest);
+      const curOi = parseFloat(data.oiHist[1].sumOpenInterest);
+      oiChangePct = ((curOi-prevOi)/prevOi)*100;
+    }
+    const trend = ema9>ema21 ? 1 : (ema9<ema21 ? -1 : 0);
+    const oiAlign = (priceChangePct>0 && oiChangePct>0) ? 1 : ((priceChangePct<0 && oiChangePct>0) ? -1 : 0);
+    const base = trend + oiAlign;
+    const dir = base>=1 ? 1 : (base<=-1 ? -1 : 0);
+    const recentVol = volumes.slice(-3).reduce((a,b)=>a+b,0)/3;
+    const baseVol = volumes.slice(-23,-3).reduce((a,b)=>a+b,0)/20;
+    const volRatio = baseVol>0 ? recentVol/baseVol : 1;
+    const trendScore = volRatio<0.9 ? 0 : dir;
+
+    const composite = flowScore + bookScore + zoneScore + sentScore + trendScore;
+    const confidence = Math.min(100, Math.round((Math.abs(composite)/5)*100));
+
+    return {
+      composite, confidence,
+      flowScore, flowRatio, bookScore, bookImbalance, zoneScore, rangePos,
+      sentScore, fundingRate, trendScore, ema9, ema21, volRatio,
+      rsiVal, lastClose, priceChangePct, oiChangePct,
+      closesForChart: closes.slice(-60), ema9arr, ema21arr,
+      ticker: data.ticker
+    };
+  }
+
+  function decideSide(composite, prevSide){
+    if(prevSide==='LONG') return composite<=0 ? (composite<=-ENTER_THRESHOLD?'SHORT':'WAIT') : 'LONG';
+    if(prevSide==='SHORT') return composite>=0 ? (composite>=ENTER_THRESHOLD?'LONG':'WAIT') : 'SHORT';
+    if(composite>=ENTER_THRESHOLD) return 'LONG';
+    if(composite<=-ENTER_THRESHOLD) return 'SHORT';
+    return 'WAIT';
+  }
+
+  async function loadOpenTrade(){
+    try{ const r = await window.storage.get('open-trade'); return r ? JSON.parse(r.value) : null; }catch(e){ return null; }
+  }
+  async function saveOpenTrade(trade){
+    try{ if(trade) await window.storage.set('open-trade', JSON.stringify(trade)); else await window.storage.delete('open-trade'); }catch(e){}
+  }
+  async function loadActiveState(){
+    try{ const r = await window.storage.get('active-state'); return r ? JSON.parse(r.value) : null; }catch(e){ return null; }
+  }
+  async function saveActiveState(state){
+    try{ await window.storage.set('active-state', JSON.stringify(state)); }catch(e){}
+  }
+  async function logHistory(entry){
+    try{ await window.storage.set('hist:'+entry.time, JSON.stringify(entry)); }catch(e){}
+  }
+  async function updateHistory(entry){
+    try{ await window.storage.set('hist:'+entry.time, JSON.stringify(entry)); }catch(e){}
+  }
+  async function loadHistory(){
+    try{
+      const list = await window.storage.list('hist:');
+      if(!list || !list.keys) return [];
+      const items = await Promise.all(list.keys.map(async function(k){
+        try{ const r = await window.storage.get(k); return r ? JSON.parse(r.value) : null; }catch(e){ return null; }
+      }));
+      return items.filter(Boolean).sort(function(a,b){ return b.time-a.time; });
+    }catch(e){ return []; }
+  }
+
+  async function handleSignalTransition(computed){
+    const now = Date.now();
+    const decided = decideSide(computed.composite, activeState.side);
+
+    if(openTrade){
+      const dirMult = openTrade.side==='LONG' ? 1 : -1;
+      const moveNow = ((computed.lastClose - openTrade.entry)/openTrade.entry)*100*dirMult;
+      if(moveNow > openTrade.peak) openTrade.peak = moveNow;
+      openTrade.lastPrice = computed.lastClose;
+      openTrade.status = decided===openTrade.side ? 'open' : 'gesloten';
+      await updateHistory(openTrade);
+      await saveOpenTrade(openTrade.status==='open' ? openTrade : null);
+      if(openTrade.status!=='open') openTrade = null;
+    }
+    if(decided!=='WAIT' && !openTrade && decided!==activeState.side){
+      openTrade = { side:decided, entry:computed.lastClose, time:now, peak:0, lastPrice:computed.lastClose, status:'open' };
+      await saveOpenTrade(openTrade);
+      await logHistory(openTrade);
+    }
+    if(decided!==activeState.side){
+      activeState = {side:decided, since:now};
+      await saveActiveState(activeState);
+    }
+    return decided;
+  }
+
+  function flag(v){ if(v>0) return 'up'; if(v<0) return 'down'; return 'flat'; }
+  function label(v){ if(v>0) return 'bullish'; if(v<0) return 'bearish'; return 'neutraal'; }
+  function timeSince(ms){
+    const diff = Date.now()-ms;
+    const mins = Math.floor(diff/60000);
+    if(mins<60) return mins+'m';
+    const hours = Math.floor(mins/60);
+    if(hours<24) return hours+'u '+(mins%60)+'m';
+    const days = Math.floor(hours/24);
+    return days+'d '+(hours%24)+'u';
+  }
+
+  function renderTicker(computed, side){
+    const t = computed.ticker;
+    const chg = parseFloat(t.priceChangePercent);
+    const track = el('tickerTrack');
+    const txt = '<span>BTC/EUR <b>'+fmtEur(computed.lastClose)+'</b></span>'+
+      '<span>24u <b class="'+(chg>=0?'chg-up':'chg-down')+'">'+fmtPct(chg)+'</b></span>'+
+      '<span>Signaal <b>'+side+'</b></span>'+
+      '<span>RSI <b>'+computed.rsiVal.toFixed(1)+'</b></span>'+
+      '<span>Funding <b>'+computed.fundingRate.toFixed(4)+'%</b></span>'+
+      '<span>Order book <b>'+(computed.bookImbalance*100).toFixed(1)+'%</b></span>';
+    track.innerHTML = txt + txt;
+  }
+
+  let prevSide = null;
+  function renderBoard(computed, side){
+    const flapEl = el('flapWord');
+    if(prevSide !== side){ flapEl.classList.remove('flipping'); void flapEl.offsetWidth; flapEl.classList.add('flipping'); }
+    flapEl.textContent = side;
+    flapEl.className = 'flap flipping ' + side;
+    prevSide = side;
+
+    const subMap = {
+      LONG: 'Genoeg van de vijf drivers wijzen bullish, boven de drempel voor een signaal.',
+      SHORT: 'Genoeg van de vijf drivers wijzen bearish, boven de drempel voor een signaal.',
+      WAIT: 'De vijf drivers zijn niet genoeg uitgelijnd, of de vorige trend is nog niet duidelijk omgeslagen.'
+    };
+    el('boardSub').textContent = subMap[side];
+    el('priceNow').innerHTML = 'BTC <b>'+fmtEur(computed.lastClose)+'</b> <span class="'+(computed.priceChangePct>=0?'chg-up':'chg-down')+'">'+fmtPct(computed.priceChangePct)+' (4H)</span>';
+
+    el('confVal').textContent = computed.confidence + '%';
+    const fill = el('confFill');
+    fill.style.width = computed.confidence + '%';
+    fill.style.background = side==='LONG' ? 'var(--long)' : side==='SHORT' ? 'var(--short)' : 'var(--wait)';
+
+    el('mSince').textContent = timeSince(activeState.since);
+    el('mUpdated').textContent = new Date().toLocaleTimeString('nl-NL', {hour:'2-digit', minute:'2-digit'});
+
+    el('flowVal').textContent = (computed.flowRatio*100).toFixed(0)+'%';
+    el('pillFlow').textContent = label(computed.flowScore);
+    el('pillFlow').className = 'pill ' + flag(computed.flowScore);
+
+    el('bookVal').textContent = (computed.bookImbalance*100).toFixed(1)+'%';
+    el('pillBook').textContent = label(computed.bookScore);
+    el('pillBook').className = 'pill ' + flag(computed.bookScore);
+
+    el('zoneVal').textContent = (computed.rangePos*100).toFixed(0)+'% v/d range';
+    el('pillZone').textContent = label(computed.zoneScore);
+    el('pillZone').className = 'pill ' + flag(computed.zoneScore);
+
+    el('sentVal').textContent = computed.fundingRate.toFixed(4)+'%';
+    el('pillSent').textContent = label(computed.sentScore);
+    el('pillSent').className = 'pill ' + flag(computed.sentScore);
+
+    el('trendVal').textContent = computed.ema9>computed.ema21 ? 'EMA9 boven' : (computed.ema9<computed.ema21 ? 'EMA9 onder' : 'gelijk');
+    el('pillTrend').textContent = label(computed.trendScore);
+    el('pillTrend').className = 'pill ' + flag(computed.trendScore);
+  }
+
+  function renderChart(computed){
+    const canvas = el('chartCanvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = 220;
+    canvas.width = w*dpr; canvas.height = h*dpr;
+    ctx.scale(dpr,dpr);
+    ctx.clearRect(0,0,w,h);
+    const closes = computed.closesForChart;
+    const min = Math.min.apply(null, closes), max = Math.max.apply(null, closes);
+    const pad = (max-min)*0.08 || 1;
+    const lo = min-pad, hi = max+pad;
+    const x = function(i){ return (i/(closes.length-1))*w; };
+    const y = function(v){ return h - ((v-lo)/(hi-lo))*h; };
+
+    ctx.beginPath();
+    ctx.moveTo(x(0), y(closes[0]));
+    closes.forEach(function(c,i){ ctx.lineTo(x(i), y(c)); });
+    ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath();
+    const grad = ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0,'rgba(247,147,26,0.20)');
+    grad.addColorStop(1,'rgba(247,147,26,0.0)');
+    ctx.fillStyle = grad; ctx.fill();
+
+    ctx.beginPath();
+    closes.forEach(function(c,i){ if(i===0) ctx.moveTo(x(i),y(c)); else ctx.lineTo(x(i),y(c)); });
+    ctx.strokeStyle = '#F7931A'; ctx.lineWidth = 2; ctx.stroke();
+
+    function drawEma(arr, color){
+      const tail = arr.slice(-closes.length);
+      ctx.beginPath();
+      tail.forEach(function(v,i){ if(i===0) ctx.moveTo(x(i),y(v)); else ctx.lineTo(x(i),y(v)); });
+      ctx.strokeStyle = color; ctx.lineWidth = 1.3; ctx.setLineDash([3,3]); ctx.stroke(); ctx.setLineDash([]);
+    }
+    drawEma(computed.ema9arr, 'rgba(53,196,224,0.9)');
+    drawEma(computed.ema21arr, 'rgba(255,255,255,0.35)');
+  }
+
+  async function renderTrackRecord(){
+    const hist = await loadHistory();
+    const tbody = el('trBody');
+    if(hist.length===0){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Nog geen gelogde signalen. Zodra het eerste LONG of SHORT signaal vuurt, verschijnt het hier.</td></tr>';
+      el('mWeekCount').textContent = '0';
+      return;
+    }
+    const weekAgo = Date.now() - 7*24*60*60*1000;
+    el('mWeekCount').textContent = hist.filter(function(t){ return t.time>=weekAgo; }).length;
+    tbody.innerHTML = hist.slice(0,15).map(function(t){
+      const d = new Date(t.time);
+      const timeStr = d.toLocaleDateString('nl-NL',{day:'2-digit',month:'2-digit'}) + ' ' + d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+      return '<tr>'+
+        '<td class="side-'+t.side+'">'+t.side+'</td>'+
+        '<td>'+fmtEur(t.entry)+'</td>'+
+        '<td>'+timeStr+'</td>'+
+        '<td>'+fmtPct(t.peak||0)+'</td>'+
+        '<td>'+(t.status==='open'?'live':'gesloten')+'</td>'+
+      '</tr>';
+    }).join('');
+  }
+
+  async function tick(){
+    try{
+      el('statusDot').className = 'dot';
+      el('statusText').textContent = 'bijwerken...';
+      const data = await fetchAll();
+      const computed = computeAll(data);
+      const side = await handleSignalTransition(computed);
+      renderTicker(computed, side);
+      renderBoard(computed, side);
+      renderChart(computed);
+      await renderTrackRecord();
+      el('statusDot').className = 'dot live';
+      el('statusText').textContent = 'live';
+      secondsToNext = REFRESH_MS/1000;
+    }catch(e){
+      console.error(e);
+      el('statusDot').className = 'dot err';
+      el('statusText').textContent = 'geen verbinding';
+    }
+  }
+
+  function tickCountdown(){
+    secondsToNext = Math.max(0, secondsToNext-1);
+    const c = el('countdown');
+    if(c) c.textContent = secondsToNext;
+  }
+
+  (async function init(){
+    openTrade = await loadOpenTrade();
+    const savedState = await loadActiveState();
+    if(savedState) activeState = savedState;
+    else if(openTrade) activeState = {side:openTrade.side, since:openTrade.time};
+    await tick();
+    setInterval(tick, REFRESH_MS);
+    setInterval(tickCountdown, 1000);
+  })();
+})();
+</script>
+
+</body>
+</html>
